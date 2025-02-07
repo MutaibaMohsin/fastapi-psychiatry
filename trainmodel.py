@@ -6,9 +6,8 @@ from sentence_transformers import SentenceTransformer
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 from fastapi import FastAPI
 from pydantic import BaseModel
-import nest_asyncio
+import requests
 import uvicorn
-from pyngrok import ngrok
 
 # 🔹 Initialize FastAPI
 app = FastAPI()
@@ -19,9 +18,18 @@ embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 summarization_model = AutoModelForSeq2SeqLM.from_pretrained("google/long-t5-tglobal-base")
 summarization_tokenizer = AutoTokenizer.from_pretrained("google/long-t5-tglobal-base")
 
-# 🔹 Load Datasets (Upload CSV Files Manually)
-recommendations_df = pd.read_csv("/content/drive/MyDrive/treatment_recommendations (2).csv")
-questions_df = pd.read_csv("/content/drive/MyDrive/symptom_questions.csv")
+# 🔹 Load Datasets from GitHub
+repo_url = "https://raw.githubusercontent.com/MutaibaMohsin/fastapi-psychiatry/main/"
+
+def load_csv_from_github(filename):
+    url = repo_url + filename
+    response = requests.get(url)
+    with open(filename, "wb") as file:
+        file.write(response.content)
+    return pd.read_csv(filename)
+
+recommendations_df = load_csv_from_github("treatment_recommendations.csv")
+questions_df = load_csv_from_github("symptom_questions.csv")
 
 # 🔹 Create FAISS Index for Treatment Retrieval
 treatment_embeddings = similarity_model.encode(recommendations_df["Disorder"].tolist(), convert_to_numpy=True)
@@ -68,12 +76,6 @@ def summarize_chat(request: ChatRequest):
     summary = summarization_tokenizer.decode(summary_ids[0], skip_special_tokens=True)
     return {"summary": summary}
 
-# # Allow FastAPI to run in Colab
-# nest_asyncio.apply()
-# !ngrok authtoken 2sipAHBxr0905blZoi7QiQ8SYER_6vi7NTQNiucisw7hqHtem
-# # Expose API using ngrok
-# public_url = ngrok.connect(8000).public_url
-# print(f"🚀 Public API URL: {public_url}")
-
-# # Start FastAPI Server
-# uvicorn.run(app, host="0.0.0.0", port=8000)
+# Run FastAPI Server
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
